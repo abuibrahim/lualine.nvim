@@ -432,17 +432,12 @@ function M.format_highlight(section, is_focused)
 end
 
 ---@param hl_name string name of highlight group
----@return number|nil cterm color that fills the cells of hl_name: its
----  background, or its foreground when it's reversed
-local function get_cterm_fill_color(hl_name)
-  if vim.fn.hlexists(hl_name) == 0 then
-    return nil
-  end
-  local hl = vim.api.nvim_get_hl_by_name(hl_name, false)
-  if hl.reverse then
-    return hl.foreground
-  end
-  return hl.background
+---@return string|nil, number|nil gui and cterm colors that fill the cells
+---  of hl_name: its background, or its foreground when it's reversed
+local function get_fill_colors(hl_name)
+  local gui = modules.utils.extract_highlight_colors(hl_name) or {}
+  local cterm = vim.fn.hlexists(hl_name) == 1 and vim.api.nvim_get_hl_by_name(hl_name, false) or {}
+  return gui[gui.reverse and 'fg' or 'bg'], cterm[cterm.reverse and 'foreground' or 'background']
 end
 
 ---@description : Provides transitional highlights for section separators.
@@ -462,23 +457,23 @@ function M.get_transitional_highlights(left_hl, right_hl)
   if not M.highlight_exists(highlight_name) then
     -- Create the highlight_group if needed
     -- Get colors from highlights
-    local fg = modules.utils.extract_highlight_colors(left_hl, 'bg')
-    local bg = modules.utils.extract_highlight_colors(right_hl, 'bg')
-    if not fg and not bg then
-      -- Themes that link to hl groups with only cterm colors have no gui
-      -- colors to transition between, so transition between cterm colors.
-      local cterm_fg, cterm_bg = get_cterm_fill_color(left_hl), get_cterm_fill_color(right_hl)
-      if cterm_fg == cterm_bg then
-        return nil -- Color retrieval failed or separator won't be visible
-      end
-      vim.api.nvim_set_hl(0, highlight_name, { ctermfg = cterm_fg, ctermbg = cterm_bg, nocombine = true })
-      loaded_highlights[highlight_name] = { attached = {} }
-      return '%#' .. highlight_name .. '#'
+    local fg, cterm_fg = get_fill_colors(left_hl)
+    local bg, cterm_bg = get_fill_colors(right_hl)
+    if not fg and not bg and cterm_fg == cterm_bg then
+      return nil -- Color retrieval failed or separator won't be visible
     end
-    if bg == fg then
+    if (fg or bg) and bg == fg then
       return nil -- Separator won't be visible anyway
     end
     M.highlight(highlight_name, fg, bg, nil, nil)
+    -- A side with only a cterm color keeps it, so themes that link to hl
+    -- groups without gui colors get separators too.
+    if not fg and cterm_fg then
+      vim.cmd(string.format('highlight %s ctermfg=%d', highlight_name, cterm_fg))
+    end
+    if not bg and cterm_bg then
+      vim.cmd(string.format('highlight %s ctermbg=%d', highlight_name, cterm_bg))
+    end
     attach_hl(left_hl, highlight_name, 'bg', 'fg')
     attach_hl(right_hl, highlight_name, 'bg', 'bg')
   end
