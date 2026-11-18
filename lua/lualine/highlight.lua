@@ -431,6 +431,20 @@ function M.format_highlight(section, is_focused)
   return ret
 end
 
+---@param hl_name string name of highlight group
+---@return number|nil cterm color that fills the cells of hl_name: its
+---  background, or its foreground when it's reversed
+local function get_cterm_fill_color(hl_name)
+  if vim.fn.hlexists(hl_name) == 0 then
+    return nil
+  end
+  local hl = vim.api.nvim_get_hl_by_name(hl_name, false)
+  if hl.reverse then
+    return hl.foreground
+  end
+  return hl.background
+end
+
 ---@description : Provides transitional highlights for section separators.
 ---@param left_hl string this highlights bg is used for fg of transitional hl
 ---@param right_hl string this highlights bg is used for bg of transitional hl
@@ -451,7 +465,15 @@ function M.get_transitional_highlights(left_hl, right_hl)
     local fg = modules.utils.extract_highlight_colors(left_hl, 'bg')
     local bg = modules.utils.extract_highlight_colors(right_hl, 'bg')
     if not fg and not bg then
-      return nil -- Color retrieval failed
+      -- Themes that link to hl groups with only cterm colors have no gui
+      -- colors to transition between, so transition between cterm colors.
+      local cterm_fg, cterm_bg = get_cterm_fill_color(left_hl), get_cterm_fill_color(right_hl)
+      if cterm_fg == cterm_bg then
+        return nil -- Color retrieval failed or separator won't be visible
+      end
+      vim.api.nvim_set_hl(0, highlight_name, { ctermfg = cterm_fg, ctermbg = cterm_bg, nocombine = true })
+      loaded_highlights[highlight_name] = { attached = {} }
+      return '%#' .. highlight_name .. '#'
     end
     if bg == fg then
       return nil -- Separator won't be visible anyway

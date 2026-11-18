@@ -163,6 +163,21 @@ describe('Lualine', function()
     ]===])
   end)
 
+  it('can transition between sections with only cterm colors', function()
+    vim.api.nvim_set_hl(0, 'TestCtermA', { ctermfg = 4, reverse = true })
+    vim.api.nvim_set_hl(0, 'TestCtermB', { ctermbg = 8 })
+    vim.api.nvim_set_hl(0, 'TestCtermC', {})
+    config.options.theme = { normal = { a = 'TestCtermA', b = 'TestCtermB', c = 'TestCtermC' } }
+    require('lualine').setup(config)
+    local stl = require('lualine').statusline(true)
+    local a_to_b = 'lualine_transitional_lualine_a_normal_to_lualine_b_normal'
+    local b_to_c = 'lualine_transitional_lualine_b_normal_to_lualine_c_normal'
+    eq(true, stl:find('%#' .. a_to_b .. '#', 1, true) ~= nil)
+    eq(true, stl:find('%#' .. b_to_c .. '#', 1, true) ~= nil)
+    eq({ foreground = 4, background = 8, nocombine = true }, vim.api.nvim_get_hl_by_name(a_to_b, false))
+    eq({ foreground = 8, nocombine = true }, vim.api.nvim_get_hl_by_name(b_to_c, false))
+  end)
+
   it('Can work without component_separators', function()
     table.insert(config.sections.lualine_a, function()
       return 'test_comp1'
